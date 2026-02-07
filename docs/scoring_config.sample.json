@@ -1,0 +1,20 @@
+{
+  "base_score": 50.0,
+  "ret_3d_pos": 0.03,
+  "ret_3d_neg": -0.03,
+  "ret_10d_pos": 0.05,
+  "ret_10d_neg": -0.05,
+  "avg_amount_5d_high": 500000000.0,
+  "vol_5d_high": 0.08,
+  "drawdown_10d_deep": -0.08,
+  "w_ret_3d_pos": 10.0,
+  "w_ret_3d_neg": -10.0,
+  "w_ret_10d_pos": 8.0,
+  "w_ret_10d_neg": -8.0,
+  "w_amount_high": 8.0,
+  "w_amount_low": -4.0,
+  "w_drawdown_deep": 6.0,
+  "w_vol_high": -6.0,
+  "min_score": 0.0,
+  "max_score": 100.0
+}
