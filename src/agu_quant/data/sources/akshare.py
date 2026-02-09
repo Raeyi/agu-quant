@@ -264,3 +264,138 @@ class AkShareClient:
             store.save(cache_key, df)
 
         return df
+
+    def concept_list_em(self, allow_cache_fallback: bool = True) -> pd.DataFrame:
+        """
+        获取东方财富概念板块列表。
+        主要字段：concept（概念名称）, code（概念代码，若有）
+        """
+        import akshare as ak
+
+        cache_key = "akshare_concept_list_em"
+        store = self._cache()
+        if self.use_cache and store is not None:
+            cached = store.load(cache_key)
+            if cached is not None and not cached.empty:
+                if self.verbose:
+                    print(f"[cache hit] {cache_key}")
+                return cached
+
+        raw = None
+        last_exc: Optional[Exception] = None
+        attempts = max(1, self.retries + 1)
+        for i in range(attempts):
+            try:
+                raw = ak.stock_board_concept_name_em()
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+                if self.verbose:
+                    print(f"[retry] concept_list_em {i + 1}/{attempts}: {exc}")
+                if i < attempts - 1:
+                    time.sleep(self.retry_backoff_sec * (i + 1))
+        if last_exc is not None:
+            if allow_cache_fallback and store is not None:
+                cached = store.load(cache_key)
+                if cached is not None and not cached.empty:
+                    if self.verbose:
+                        print(f"[cache fallback] {cache_key}")
+                    return cached
+            if self.verbose:
+                print("[warn] 概念列表拉取失败，返回空结果")
+            return pd.DataFrame(columns=["concept", "code"])
+
+        if raw is None or raw.empty:
+            return pd.DataFrame(columns=["concept", "code"])
+
+        df = raw.copy()
+        name_col = _first_column(df, ["板块名称", "概念名称", "名称"])
+        code_col = _first_column(df, ["板块代码", "概念代码", "代码"])
+
+        if name_col is None:
+            return pd.DataFrame(columns=["concept", "code"])
+
+        df = df.rename(columns={name_col: "concept"})
+        if code_col is not None and code_col in df.columns:
+            df = df.rename(columns={code_col: "code"})
+        else:
+            df["code"] = ""
+
+        out = df[["concept", "code"]]
+        if self.use_cache and store is not None:
+            store.save(cache_key, out)
+        return out
+
+    def concept_constituents_em(
+        self, concept_name: str, allow_cache_fallback: bool = True
+    ) -> pd.DataFrame:
+        """
+        获取东方财富概念板块成分股。
+        输出字段：symbol, code, name
+        """
+        import akshare as ak
+
+        cache_key = f"akshare_concept_cons_em::{concept_name}"
+        store = self._cache()
+        if self.use_cache and store is not None:
+            cached = store.load(cache_key)
+            if cached is not None and not cached.empty:
+                if self.verbose:
+                    print(f"[cache hit] {cache_key}")
+                return cached
+
+        raw = None
+        last_exc: Optional[Exception] = None
+        attempts = max(1, self.retries + 1)
+        for i in range(attempts):
+            try:
+                raw = ak.stock_board_concept_cons_em(concept_name)
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+                if self.verbose:
+                    print(f"[retry] concept_constituents_em {concept_name} {i + 1}/{attempts}: {exc}")
+                if i < attempts - 1:
+                    time.sleep(self.retry_backoff_sec * (i + 1))
+        if last_exc is not None:
+            if allow_cache_fallback and store is not None:
+                cached = store.load(cache_key)
+                if cached is not None and not cached.empty:
+                    if self.verbose:
+                        print(f"[cache fallback] {cache_key}")
+                    return cached
+            if self.verbose:
+                print(f"[warn] 概念成分拉取失败: {concept_name}")
+            return pd.DataFrame(columns=["symbol", "code", "name"])
+
+        if raw is None or raw.empty:
+            return pd.DataFrame(columns=["symbol", "code", "name"])
+
+        df = raw.copy()
+        code_col = _first_column(df, ["代码", "股票代码", "证券代码"])
+        name_col = _first_column(df, ["名称", "股票名称", "证券简称"])
+
+        if code_col is None:
+            return pd.DataFrame(columns=["symbol", "code", "name"])
+
+        df = df.rename(columns={code_col: "code"})
+        if name_col is not None and name_col in df.columns:
+            df = df.rename(columns={name_col: "name"})
+        else:
+            df["name"] = ""
+
+        df["code"] = df["code"].astype(str).str.zfill(6)
+        df["symbol"] = df["code"].map(normalize_symbol)
+        out = df[["symbol", "code", "name"]]
+        if self.use_cache and store is not None:
+            store.save(cache_key, out)
+        return out
+
+
+def _first_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    for col in candidates:
+        if col in df.columns:
+            return col
+    return None
