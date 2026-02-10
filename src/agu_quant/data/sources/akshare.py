@@ -393,6 +393,259 @@ class AkShareClient:
             store.save(cache_key, out)
         return out
 
+    def lhb_institution_detail_sina(
+        self, allow_cache_fallback: bool = True
+    ) -> pd.DataFrame:
+        """
+        龙虎榜-机构席位成交明细。
+        输出字段（标准化）:
+        date, code, name, inst_buy, inst_sell, inst_net, reason
+        """
+        import akshare as ak
+
+        cache_key = "akshare_lhb_jgmx_sina"
+        store = self._cache()
+        if self.use_cache and store is not None:
+            cached = store.load(cache_key)
+            if cached is not None and not cached.empty:
+                if self.verbose:
+                    print(f"[cache hit] {cache_key}")
+                return cached
+
+        if not hasattr(ak, "stock_lhb_jgmx_sina"):
+            if self.verbose:
+                print("[warn] 当前 akshare 版本缺少 stock_lhb_jgmx_sina 接口")
+            return pd.DataFrame(
+                columns=["date", "code", "name", "inst_buy", "inst_sell", "inst_net", "reason"]
+            )
+
+        raw = None
+        last_exc: Optional[Exception] = None
+        attempts = max(1, self.retries + 1)
+        for i in range(attempts):
+            try:
+                raw = ak.stock_lhb_jgmx_sina()
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+                if self.verbose:
+                    print(f"[retry] lhb_jgmx {i + 1}/{attempts}: {exc}")
+                if i < attempts - 1:
+                    time.sleep(self.retry_backoff_sec * (i + 1))
+        if last_exc is not None:
+            if allow_cache_fallback and store is not None:
+                cached = store.load(cache_key)
+                if cached is not None and not cached.empty:
+                    if self.verbose:
+                        print(f"[cache fallback] {cache_key}")
+                    return cached
+            if self.verbose:
+                print("[warn] 龙虎榜机构明细拉取失败，返回空结果")
+            return pd.DataFrame(
+                columns=["date", "code", "name", "inst_buy", "inst_sell", "inst_net", "reason"]
+            )
+
+        if raw is None or raw.empty:
+            return pd.DataFrame(
+                columns=["date", "code", "name", "inst_buy", "inst_sell", "inst_net", "reason"]
+            )
+
+        df = raw.copy()
+        date_col = _first_column(df, ["交易日期", "日期"])
+        code_col = _first_column(df, ["股票代码", "代码"])
+        name_col = _first_column(df, ["股票名称", "名称"])
+        buy_col = _first_column(df, ["机构席位买入额", "买入额"])
+        sell_col = _first_column(df, ["机构席位卖出额", "卖出额"])
+        reason_col = _first_column(df, ["类型", "上榜原因"])
+
+        if date_col is None or code_col is None:
+            return pd.DataFrame(
+                columns=["date", "code", "name", "inst_buy", "inst_sell", "inst_net", "reason"]
+            )
+
+        df = df.rename(
+            columns={
+                date_col: "date",
+                code_col: "code",
+                name_col: "name",
+                buy_col: "inst_buy",
+                sell_col: "inst_sell",
+                reason_col: "reason",
+            }
+        )
+
+        for col in ["inst_buy", "inst_sell"]:
+            if col in df.columns:
+                df[col] = (
+                    pd.to_numeric(df[col], errors="coerce")
+                    .fillna(0)
+                )
+
+        df["inst_net"] = df.get("inst_buy", 0) - df.get("inst_sell", 0)
+        df["code"] = df["code"].astype(str).str.zfill(6)
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+
+        out = df[["date", "code", "name", "inst_buy", "inst_sell", "inst_net", "reason"]]
+        if self.use_cache and store is not None:
+            store.save(cache_key, out)
+        return out
+
+    def lhb_broker_active_em(
+        self,
+        start_date: str,
+        end_date: str,
+        allow_cache_fallback: bool = True,
+    ) -> pd.DataFrame:
+        """
+        LHB active broker list (Eastmoney).
+        Output columns (standardized):
+        date, broker, buy, sell, net, buy_count, sell_count, stocks
+        """
+        import akshare as ak
+
+        cache_key = f"akshare_lhb_hyyyb_em::{start_date}::{end_date}"
+        store = self._cache()
+        if self.use_cache and store is not None:
+            cached = store.load(cache_key)
+            if cached is not None and not cached.empty:
+                if self.verbose:
+                    print(f"[cache hit] {cache_key}")
+                return cached
+
+        if not hasattr(ak, "stock_lhb_hyyyb_em"):
+            if self.verbose:
+                print("[warn] akshare missing stock_lhb_hyyyb_em")
+            return pd.DataFrame(
+                columns=[
+                    "date",
+                    "broker",
+                    "buy",
+                    "sell",
+                    "net",
+                    "buy_count",
+                    "sell_count",
+                    "stocks",
+                ]
+            )
+
+        raw = None
+        last_exc: Optional[Exception] = None
+        attempts = max(1, self.retries + 1)
+        for i in range(attempts):
+            try:
+                raw = ak.stock_lhb_hyyyb_em(start_date=start_date, end_date=end_date)
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+                if self.verbose:
+                    print(f"[retry] lhb_hyyyb_em {i + 1}/{attempts}: {exc}")
+                if i < attempts - 1:
+                    time.sleep(self.retry_backoff_sec * (i + 1))
+
+        if last_exc is not None:
+            if allow_cache_fallback and store is not None:
+                cached = store.load(cache_key)
+                if cached is not None and not cached.empty:
+                    if self.verbose:
+                        print(f"[cache fallback] {cache_key}")
+                    return cached
+            if self.verbose:
+                print("[warn] lhb_hyyyb_em fetch failed, returning empty")
+            return pd.DataFrame(
+                columns=[
+                    "date",
+                    "broker",
+                    "buy",
+                    "sell",
+                    "net",
+                    "buy_count",
+                    "sell_count",
+                    "stocks",
+                ]
+            )
+
+        if raw is None or raw.empty:
+            return pd.DataFrame(
+                columns=[
+                    "date",
+                    "broker",
+                    "buy",
+                    "sell",
+                    "net",
+                    "buy_count",
+                    "sell_count",
+                    "stocks",
+                ]
+            )
+
+        df = raw.copy()
+        date_col = _first_column(df, ["上榜日", "日期", "交易日期"])
+        broker_col = _first_column(df, ["营业部名称", "营业部", "席位"])
+        buy_count_col = _first_column(df, ["买入个股数", "买入股票数量", "买入只数"])
+        sell_count_col = _first_column(df, ["卖出个股数", "卖出股票数量", "卖出只数"])
+        buy_col = _first_column(df, ["买入总金额", "买入额", "买入金额"])
+        sell_col = _first_column(df, ["卖出总金额", "卖出额", "卖出金额"])
+        net_col = _first_column(df, ["总买卖净额", "净额", "净买入"])
+        stocks_col = _first_column(df, ["买入股票", "买入股票名称"])
+
+        if date_col is None or broker_col is None:
+            return pd.DataFrame(
+                columns=[
+                    "date",
+                    "broker",
+                    "buy",
+                    "sell",
+                    "net",
+                    "buy_count",
+                    "sell_count",
+                    "stocks",
+                ]
+            )
+
+        df = df.rename(
+            columns={
+                date_col: "date",
+                broker_col: "broker",
+                buy_count_col: "buy_count",
+                sell_count_col: "sell_count",
+                buy_col: "buy",
+                sell_col: "sell",
+                net_col: "net",
+                stocks_col: "stocks",
+            }
+        )
+
+        for col in ["buy", "sell", "net"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+        for col in ["buy_count", "sell_count"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+        if "net" not in df.columns or df["net"].isna().all():
+            df["net"] = df.get("buy", 0) - df.get("sell", 0)
+
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+
+        out = df[
+            [
+                "date",
+                "broker",
+                "buy",
+                "sell",
+                "net",
+                "buy_count",
+                "sell_count",
+                "stocks",
+            ]
+        ]
+        if self.use_cache and store is not None:
+            store.save(cache_key, out)
+        return out
+
 
 def _first_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
     for col in candidates:
