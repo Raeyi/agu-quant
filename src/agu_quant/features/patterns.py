@@ -88,7 +88,9 @@ def add_pattern_flags(
         return group
 
     if group_cols:
-        out = out.groupby(group_cols, group_keys=False).apply(_compute)
+        out = out.groupby(group_cols, group_keys=False).apply(
+            _compute, include_groups=False
+        )
     else:
         out = _compute(out)
 

@@ -103,11 +103,31 @@
 
 | 字段 | 中文含义 |
 | --- | --- |
+| date | 最近交易日 |
+| close | 收盘价 |
+| pct_chg | 涨跌幅（百分比） |
+| turnover | 换手率（百分比） |
+| amount | 成交额 |
+| industry | 同花顺行业 |
+| industry_consecutive | 行业内最新连板高度 |
+| youzi_hit | 是否有著名游资席位参与（1/0） |
+| youzi_brokers | 命中席位列表（分号分隔） |
+| limit_up | 涨停标记（1/0） |
+| broken_limit_up | 炸板标记（1/0） |
+| consecutive | 连板数 |
+| breakout_volume | 放量突破 |
+| turnover_board | 换手板 |
+| one_word_board | 一字板 |
+| shrink_volume_board | 缩量板 |
+| turnover_z | 换手率 Z 分数 |
+| turnover_norm | 换手率归一化（0-1） |
+| turnover_pct_rank | 换手率滚动分位 |
 | score | 评分 |
 | suggested_position | 建议仓位 |
 | reason | 评分理由 |
 | ret_3d | 近 3 日收益 |
 | ret_10d | 近 10 日收益 |
+| ret_20d | 近 20 日收益 |
 | avg_amount_5d | 近 5 日平均成交额 |
 | vol_5d | 近 5 日波动幅度 |
 | drawdown_10d | 近 10 日回撤 |

@@ -1,4 +1,4 @@
-{
+﻿{
   "base_score": 50.0,
   "ret_3d_pos": 0.03,
   "ret_3d_neg": -0.03,
@@ -16,5 +16,25 @@
   "w_drawdown_deep": 6.0,
   "w_vol_high": -6.0,
   "min_score": 0.0,
-  "max_score": 100.0
+  "max_score": 100.0,
+  "rule_enabled": {
+    "ret_3d_pos": true,
+    "ret_3d_neg": true,
+    "ret_10d_pos": true,
+    "ret_10d_neg": true,
+    "amount_high": true,
+    "amount_low": true,
+    "drawdown_deep": true,
+    "vol_high": true
+  },
+  "reason_templates": {
+    "ret_3d_pos": "近3日涨幅 {ret_3d:.2%} 强势",
+    "ret_3d_neg": "近3日回撤 {ret_3d:.2%} 偏弱",
+    "ret_10d_pos": "近10日趋势向上 {ret_10d:.2%}",
+    "ret_10d_neg": "近10日趋势向下 {ret_10d:.2%}",
+    "amount_high": "5日成交额均值 {avg_amount_5d:.0f} 偏高",
+    "amount_low": "5日成交额均值 {avg_amount_5d:.0f} 偏低",
+    "drawdown_deep": "10日回撤 {drawdown_10d:.2%} 偏深",
+    "vol_high": "5日波动 {vol_5d:.2%} 偏高"
+  }
 }

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List
@@ -6,6 +6,7 @@ from typing import Dict, List
 import pandas as pd
 
 from agu_quant.signals.scoring_config import ScoringConfig
+
 
 @dataclass(frozen=True)
 class ScoreResult:
@@ -19,6 +20,13 @@ def _safe_pct(numerator: float, denominator: float) -> float:
     if denominator == 0:
         return 0.0
     return numerator / denominator
+
+
+def _format_reason(template: str, metrics: Dict[str, float]) -> str:
+    try:
+        return template.format(**metrics)
+    except Exception:
+        return template
 
 
 def score_daily_bars(df: pd.DataFrame, config: ScoringConfig | None = None) -> ScoreResult:
@@ -48,42 +56,6 @@ def score_daily_bars(df: pd.DataFrame, config: ScoringConfig | None = None) -> S
         recent_high = close.tail(10).max()
         drawdown_10d = _safe_pct(close.iloc[-1] - recent_high, recent_high)
 
-    # 简单规则化评分
-    score = config.base_score
-    reasons: List[str] = []
-
-    if ret_3d > config.ret_3d_pos:
-        score += config.w_ret_3d_pos
-        reasons.append("近3日涨幅偏强")
-    elif ret_3d < config.ret_3d_neg:
-        score += config.w_ret_3d_neg
-        reasons.append("近3日走弱")
-
-    if ret_10d > config.ret_10d_pos:
-        score += config.w_ret_10d_pos
-        reasons.append("近10日趋势偏强")
-    elif ret_10d < config.ret_10d_neg:
-        score += config.w_ret_10d_neg
-        reasons.append("近10日趋势偏弱")
-
-    if avg_amount_5d > config.avg_amount_5d_high:
-        score += config.w_amount_high
-        reasons.append("成交额较高")
-    else:
-        score += config.w_amount_low
-        reasons.append("成交额偏低")
-
-    if drawdown_10d < config.drawdown_10d_deep:
-        score += config.w_drawdown_deep
-        reasons.append("10日回撤较深（可能超跌）")
-
-    if vol_5d > config.vol_5d_high:
-        score += config.w_vol_high
-        reasons.append("波动过大")
-
-    score = max(config.min_score, min(config.max_score, score))
-    suggested_position = round(score / config.max_score, 2) if config.max_score > 0 else 0.0
-
     metrics = {
         "ret_3d": float(ret_3d),
         "ret_10d": float(ret_10d),
@@ -91,6 +63,44 @@ def score_daily_bars(df: pd.DataFrame, config: ScoringConfig | None = None) -> S
         "vol_5d": float(vol_5d) if pd.notna(vol_5d) else 0.0,
         "drawdown_10d": float(drawdown_10d),
     }
+
+    # 规则化评分（配置化 + 可解释理由模板）
+    score = config.base_score
+    reasons: List[str] = []
+    enabled = config.rule_enabled
+    templates = config.reason_templates
+
+    if enabled.get("ret_3d_pos", True) and ret_3d > config.ret_3d_pos:
+        score += config.w_ret_3d_pos
+        reasons.append(_format_reason(templates.get("ret_3d_pos", ""), metrics))
+    elif enabled.get("ret_3d_neg", True) and ret_3d < config.ret_3d_neg:
+        score += config.w_ret_3d_neg
+        reasons.append(_format_reason(templates.get("ret_3d_neg", ""), metrics))
+
+    if enabled.get("ret_10d_pos", True) and ret_10d > config.ret_10d_pos:
+        score += config.w_ret_10d_pos
+        reasons.append(_format_reason(templates.get("ret_10d_pos", ""), metrics))
+    elif enabled.get("ret_10d_neg", True) and ret_10d < config.ret_10d_neg:
+        score += config.w_ret_10d_neg
+        reasons.append(_format_reason(templates.get("ret_10d_neg", ""), metrics))
+
+    if enabled.get("amount_high", True) and avg_amount_5d > config.avg_amount_5d_high:
+        score += config.w_amount_high
+        reasons.append(_format_reason(templates.get("amount_high", ""), metrics))
+    elif enabled.get("amount_low", True):
+        score += config.w_amount_low
+        reasons.append(_format_reason(templates.get("amount_low", ""), metrics))
+
+    if enabled.get("drawdown_deep", True) and drawdown_10d < config.drawdown_10d_deep:
+        score += config.w_drawdown_deep
+        reasons.append(_format_reason(templates.get("drawdown_deep", ""), metrics))
+
+    if enabled.get("vol_high", True) and vol_5d > config.vol_5d_high:
+        score += config.w_vol_high
+        reasons.append(_format_reason(templates.get("vol_high", ""), metrics))
+
+    score = max(config.min_score, min(config.max_score, score))
+    suggested_position = round(score / config.max_score, 2) if config.max_score > 0 else 0.0
 
     return ScoreResult(
         score=score,

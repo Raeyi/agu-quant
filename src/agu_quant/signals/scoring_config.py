@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 
 
 @dataclass(frozen=True)
@@ -28,13 +28,37 @@ class ScoringConfig:
 
     min_score: float = 0.0
     max_score: float = 100.0
+    rule_enabled: Dict[str, bool] = field(
+        default_factory=lambda: {
+            "ret_3d_pos": True,
+            "ret_3d_neg": True,
+            "ret_10d_pos": True,
+            "ret_10d_neg": True,
+            "amount_high": True,
+            "amount_low": True,
+            "drawdown_deep": True,
+            "vol_high": True,
+        }
+    )
+    reason_templates: Dict[str, str] = field(
+        default_factory=lambda: {
+            "ret_3d_pos": "近3日涨幅 {ret_3d:.2%} 强势",
+            "ret_3d_neg": "近3日回撤 {ret_3d:.2%} 偏弱",
+            "ret_10d_pos": "近10日趋势向上 {ret_10d:.2%}",
+            "ret_10d_neg": "近10日趋势向下 {ret_10d:.2%}",
+            "amount_high": "5日成交额均值 {avg_amount_5d:.0f} 偏高",
+            "amount_low": "5日成交额均值 {avg_amount_5d:.0f} 偏低",
+            "drawdown_deep": "10日回撤 {drawdown_10d:.2%} 偏深",
+            "vol_high": "5日波动 {vol_5d:.2%} 偏高",
+        }
+    )
 
     @staticmethod
     def from_json(path: Path) -> "ScoringConfig":
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
         return ScoringConfig(**data)
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "base_score": self.base_score,
             "ret_3d_pos": self.ret_3d_pos,
@@ -54,4 +78,6 @@ class ScoringConfig:
             "w_vol_high": self.w_vol_high,
             "min_score": self.min_score,
             "max_score": self.max_score,
+            "rule_enabled": self.rule_enabled,
+            "reason_templates": self.reason_templates,
         }

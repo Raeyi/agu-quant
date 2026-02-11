@@ -117,7 +117,12 @@ def backtest_multi_positions(
     - positions_by_symbol: symbol -> 与 date 对齐的仓位（0-1）
     """
     if not bars_by_symbol:
-        return MultiBacktestResult(equity_curve=pd.DataFrame(), metrics={}, per_symbol_metrics={})
+        return MultiBacktestResult(
+            equity_curve=pd.DataFrame(),
+            metrics={},
+            per_symbol_metrics={},
+            trades=pd.DataFrame(),
+        )
 
     per_symbol_curves: List[pd.DataFrame] = []
     per_symbol_metrics: Dict[str, Dict[str, float]] = {}
@@ -153,7 +158,12 @@ def backtest_multi_positions(
         trades_frames.append(trades)
 
     if not per_symbol_curves:
-        return MultiBacktestResult(equity_curve=pd.DataFrame(), metrics={}, per_symbol_metrics={})
+        return MultiBacktestResult(
+            equity_curve=pd.DataFrame(),
+            metrics={},
+            per_symbol_metrics={},
+            trades=pd.DataFrame(),
+        )
 
     merged = per_symbol_curves[0]
     for nxt in per_symbol_curves[1:]:
@@ -206,6 +216,8 @@ def backtest_multi_positions(
     }
 
     trades_df = pd.concat(trades_frames, ignore_index=True) if trades_frames else pd.DataFrame()
+    trade_stats = _trade_stats(trades_df)
+    metrics.update(trade_stats)
 
     return MultiBacktestResult(
         equity_curve=merged,
@@ -213,6 +225,44 @@ def backtest_multi_positions(
         per_symbol_metrics=per_symbol_metrics,
         trades=trades_df,
     )
+
+
+def _trade_stats(trades: pd.DataFrame) -> Dict[str, float]:
+    if trades is None or trades.empty or "return" not in trades.columns:
+        return {
+            "win_rate": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "profit_factor": 0.0,
+            "avg_hold_days": 0.0,
+            "trade_count": 0.0,
+        }
+
+    wins = trades[trades["return"] > 0.0]
+    losses = trades[trades["return"] <= 0.0]
+    win_rate = float(len(wins) / max(len(trades), 1))
+    avg_win = float(wins["return"].mean()) if not wins.empty else 0.0
+    avg_loss = float(losses["return"].mean()) if not losses.empty else 0.0
+    gross_profit = float(wins["return"].sum()) if not wins.empty else 0.0
+    gross_loss = float(losses["return"].sum()) if not losses.empty else 0.0
+    profit_factor = float(gross_profit / abs(gross_loss)) if gross_loss != 0.0 else 0.0
+
+    if "entry_date" in trades.columns and "exit_date" in trades.columns:
+        entry = pd.to_datetime(trades["entry_date"], errors="coerce")
+        exit_ = pd.to_datetime(trades["exit_date"], errors="coerce")
+        hold_days = (exit_ - entry).dt.days
+        avg_hold_days = float(hold_days.mean()) if hold_days.notna().any() else 0.0
+    else:
+        avg_hold_days = 0.0
+
+    return {
+        "win_rate": win_rate,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss,
+        "profit_factor": profit_factor,
+        "avg_hold_days": avg_hold_days,
+        "trade_count": float(len(trades)),
+    }
 
 
 def _positions_to_trades(

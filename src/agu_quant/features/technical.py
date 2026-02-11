@@ -49,13 +49,17 @@ def add_turnover_standardized(
         max_v = roll.max()
         denom = (max_v - min_v).replace(0, pd.NA)
 
-        group["turnover_z"] = ((turnover - mean) / std).fillna(0)
-        group["turnover_norm"] = ((turnover - min_v) / denom).fillna(0)
+        turnover_z = (turnover - mean) / std
+        turnover_norm = (turnover - min_v) / denom
+        group["turnover_z"] = pd.to_numeric(turnover_z, errors="coerce").fillna(0.0)
+        group["turnover_norm"] = pd.to_numeric(turnover_norm, errors="coerce").fillna(0.0)
         group["turnover_pct_rank"] = _rolling_pct_rank(turnover, window=window)
         return group
 
     if group_cols:
-        out = out.groupby(group_cols, group_keys=False).apply(_compute)
+        out = out.groupby(group_cols, group_keys=False).apply(
+            _compute, include_groups=False
+        )
     else:
         out = _compute(out)
 
@@ -114,12 +118,16 @@ def add_orderbook_strength(
         max_v = roll.max()
         denom = (max_v - min_v).replace(0, pd.NA)
 
-        group["orderbook_z"] = ((strength - mean) / std).fillna(0)
-        group["orderbook_norm"] = ((strength - min_v) / denom).fillna(0)
+        orderbook_z = (strength - mean) / std
+        orderbook_norm = (strength - min_v) / denom
+        group["orderbook_z"] = pd.to_numeric(orderbook_z, errors="coerce").fillna(0.0)
+        group["orderbook_norm"] = pd.to_numeric(orderbook_norm, errors="coerce").fillna(0.0)
         return group
 
     if group_cols:
-        out = out.groupby(group_cols, group_keys=False).apply(_compute)
+        out = out.groupby(group_cols, group_keys=False).apply(
+            _compute, include_groups=False
+        )
     else:
         out = _compute(out)
 
